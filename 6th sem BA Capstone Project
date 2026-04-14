@@ -1,0 +1,373 @@
+import pandas as pd
+
+df = pd.read_csv("/content/food_ordering_behavior_dataset.csv")
+
+# Drop duplicates
+df.drop_duplicates(inplace=True)
+
+# Drop rows with missing values
+df.dropna(inplace=True)
+
+# Strip whitespace from string columns
+for col in df.select_dtypes(include="object").columns:
+    df[col] = df[col].str.strip()
+
+# Encode Yes/No columns to 1/0
+for col in ["discount_applied", "is_repeat_order", "rainy_weather"]:
+    df[col] = df[col].map({"Yes": 1, "No": 0})
+
+df.to_csv("food_ordering_behavior_cleaned.csv", index=False)
+df.info()
+
+import pandas as pd
+
+df = pd.read_csv("food_ordering_behavior_cleaned.csv")
+
+# Basic info
+print("=== Shape ===")
+print(f"{df.shape[0]:,} rows × {df.shape[1]} columns\n")
+
+# Numeric stats
+print("=== Numeric Summary ===")
+print(df.describe().round(2))
+
+# Categorical value counts
+print("\n=== Categorical Counts ===")
+cat_cols = ["city", "cuisine", "meal_type", "restaurant_type",
+            "order_time", "day_type", "mood", "hunger_level", "company"]
+
+for col in cat_cols:
+    print(f"\n{col}:")
+    print(df[col].value_counts())
+
+# Correlation
+
+print("\n=== Correlation (numeric) ===")
+print(df.select_dtypes(include="number").corr().round(2))
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+
+df = pd.read_csv("food_ordering_behavior_cleaned.csv")
+
+sns.set_theme(style="whitegrid", palette="muted")
+
+# ── 1. Distributions of Numeric Features ─────────────────────────────────────
+fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+num_cols = ["age", "order_value", "delivery_fee", "time_taken_to_order", "rating_given"]
+colors = sns.color_palette("muted", len(num_cols))
+for col, ax, c in zip(num_cols, axes.flat, colors):
+    sns.histplot(df[col], ax=ax, color=c, kde=True, bins=25)
+    ax.set_title(col.replace("_", " ").title(), fontsize=12)
+axes.flat[-1].set_visible(False)
+fig.suptitle("Distribution of Numeric Features", fontsize=15, fontweight='bold')
+plt.tight_layout()
+plt.savefig("eda_1_distributions.png", dpi=150, bbox_inches='tight')
+plt.show()
+
+# ── 2. Categorical Feature Distributions ─────────────────────────────────────
+cat_cols = ["cuisine", "city", "meal_type", "restaurant_type", "mood", "order_time"]
+fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+for col, ax in zip(cat_cols, axes.flat):
+    counts = df[col].value_counts()
+    sns.barplot(x=counts.values, y=counts.index, ax=ax, palette="pastel")
+    ax.set_title(col.replace("_", " ").title(), fontsize=12)
+    ax.set_xlabel("Count")
+fig.suptitle("Categorical Feature Distributions", fontsize=15, fontweight='bold')
+plt.tight_layout()
+plt.savefig("eda_2_categoricals.png", dpi=150, bbox_inches='tight')
+plt.show()
+
+# ── 3. Order Value Breakdown ──────────────────────────────────────────────────
+fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+for col, ax in zip(["cuisine", "restaurant_type", "meal_type", "city"], axes.flat):
+    order = df.groupby(col)["order_value"].median().sort_values(ascending=False).index
+    sns.boxplot(data=df, x=col, y="order_value", order=order, ax=ax, palette="Set2")
+    ax.set_title(f"Order Value by {col.replace('_',' ').title()}", fontsize=12)
+    ax.tick_params(axis='x', rotation=20)
+fig.suptitle("Order Value Breakdown", fontsize=15, fontweight='bold')
+plt.tight_layout()
+plt.savefig("eda_3_order_value.png", dpi=150, bbox_inches='tight')
+plt.show()
+
+# ── 4. Ratings Analysis ───────────────────────────────────────────────────────
+fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+sns.countplot(data=df, x="rating_given", palette="Blues_d", ax=axes[0])
+axes[0].set_title("Rating Distribution")
+sns.boxplot(data=df, x="restaurant_type", y="rating_given", palette="Set3", ax=axes[1])
+axes[1].set_title("Rating by Restaurant Type")
+mood_order = df.groupby("mood")["rating_given"].mean().sort_values(ascending=False).index
+sns.barplot(data=df, x="mood", y="rating_given", order=mood_order, palette="pastel", ax=axes[2])
+axes[2].set_title("Avg Rating by Mood")
+fig.suptitle("Ratings Analysis", fontsize=15, fontweight='bold')
+plt.tight_layout()
+plt.savefig("eda_4_ratings.png", dpi=150, bbox_inches='tight')
+plt.show()
+
+# ── 5. Correlation Heatmap ────────────────────────────────────────────────────
+fig, ax = plt.subplots(figsize=(10, 7))
+corr = df.select_dtypes(include="number").drop(columns=["order_id","user_id"], errors="ignore").corr()
+mask = np.zeros_like(corr, dtype=bool)
+mask[np.triu_indices_from(mask, k=1)] = True
+sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="coolwarm",
+            center=0, ax=ax, square=True, linewidths=0.5)
+ax.set_title("Correlation Heatmap", fontsize=15, fontweight='bold')
+plt.tight_layout()
+plt.savefig("eda_5_correlation.png", dpi=150, bbox_inches='tight')
+plt.show()
+
+# ── 6. Behavioral Patterns ────────────────────────────────────────────────────
+fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+repeat = df.groupby("day_type")["is_repeat_order"].mean().reset_index()
+sns.barplot(data=repeat, x="day_type", y="is_repeat_order", palette="Set1", ax=axes[0])
+axes[0].set_title("Repeat Order Rate by Day Type")
+axes[0].set_ylabel("Rate")
+disc = df.groupby("hunger_level")["discount_applied"].mean().reindex(["Low","Medium","High"]).reset_index()
+sns.barplot(data=disc, x="hunger_level", y="discount_applied", palette="Oranges", ax=axes[1])
+axes[1].set_title("Discount Rate by Hunger Level")
+axes[1].set_ylabel("Rate")
+sns.countplot(data=df, x="company", palette="cool", ax=axes[2],
+              order=df["company"].value_counts().index)
+axes[2].set_title("Orders by Company")
+fig.suptitle("Behavioral Patterns", fontsize=15, fontweight='bold')
+plt.tight_layout()
+plt.savefig("eda_6_behavior.png", dpi=150, bbox_inches='tight')
+plt.show()
+
+print("All plots saved!")
+
+
+"""
+DIAGNOSTIC ANALYSIS
+====================
+1. Why are ratings low?
+2. Why do repeat orders vary by city?
+"""
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+
+df = pd.read_csv("food_ordering_behavior_cleaned.csv")
+
+sns.set_theme(style="whitegrid")
+
+# ── 1. Why are ratings low? ───────────────────────────────────────────────────
+low  = df[df["rating_given"] <= 2]
+high = df[df["rating_given"] >= 4]
+
+fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+fee_df = pd.DataFrame({
+    "Group": ["Low Rating (≤2)", "High Rating (≥4)"],
+    "Avg Delivery Fee": [low["delivery_fee"].mean(), high["delivery_fee"].mean()]
+})
+sns.barplot(data=fee_df, x="Group", y="Avg Delivery Fee", palette="Reds", ax=axes[0])
+axes[0].set_title("Avg Delivery Fee\nLow vs High Rating")
+
+time_df = pd.DataFrame({
+    "Group": ["Low Rating (≤2)", "High Rating (≥4)"],
+    "Avg Time (min)": [low["time_taken_to_order"].mean(), high["time_taken_to_order"].mean()]
+})
+sns.barplot(data=time_df, x="Group", y="Avg Time (min)", palette="Oranges", ax=axes[1])
+axes[1].set_title("Avg Time Taken\nLow vs High Rating")
+
+mood_low = low["mood"].value_counts()
+sns.barplot(x=mood_low.values, y=mood_low.index, palette="Blues_d", ax=axes[2])
+axes[2].set_title("Mood Distribution\nfor Low Ratings")
+
+fig.suptitle("Diagnostic: Why Are Ratings Low?", fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# ── 2. Why do repeat orders vary by city? ─────────────────────────────────────
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+repeat_city = df.groupby("city")["is_repeat_order"].mean().sort_values(ascending=False).reset_index()
+repeat_city.columns = ["city", "repeat_rate"]
+sns.barplot(data=repeat_city, x="city", y="repeat_rate", palette="Set2", ax=axes[0])
+axes[0].set_title("Repeat Order Rate by City")
+axes[0].set_ylabel("Rate")
+axes[0].tick_params(axis='x', rotation=15)
+
+disc_city = df.groupby("city")["discount_applied"].mean().sort_values(ascending=False).reset_index()
+disc_city.columns = ["city", "discount_rate"]
+sns.barplot(data=disc_city, x="city", y="discount_rate", palette="Set1", ax=axes[1])
+axes[1].set_title("Discount Usage by City")
+axes[1].set_ylabel("Rate")
+axes[1].tick_params(axis='x', rotation=15)
+
+fig.suptitle("Diagnostic: Why Do Repeat Orders Vary by City?", fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+
+"""
+PREDICTIVE ANALYSIS
+====================
+1. Predict order value (Random Forest Regression)
+2. Predict repeat order likelihood (Random Forest Classification)
+"""
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_absolute_error, r2_score, ConfusionMatrixDisplay, classification_report
+import warnings
+warnings.filterwarnings('ignore')
+
+df = pd.read_csv("food_ordering_behavior_cleaned.csv")
+
+le = LabelEncoder()
+cat_cols = ["city", "order_time", "day_type", "cuisine", "meal_type",
+            "restaurant_type", "mood", "hunger_level", "company"]
+df_enc = df.copy()
+for col in cat_cols:
+    df_enc[col] = le.fit_transform(df_enc[col].astype(str))
+
+FEATURES = ["age", "city", "order_time", "day_type", "cuisine", "meal_type",
+            "restaurant_type", "mood", "hunger_level", "company",
+            "discount_applied", "rainy_weather"]
+
+# ── 1. Predict Order Value ────────────────────────────────────────────────────
+X = df_enc[FEATURES]
+y = df_enc["order_value"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+rf.fit(X_train, y_train)
+y_pred = rf.predict(X_test)
+
+print(f"Order Value — MAE: {mean_absolute_error(y_test, y_pred):.2f}, R²: {r2_score(y_test, y_pred):.3f}")
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+imp = pd.Series(rf.feature_importances_, index=FEATURES).sort_values(ascending=False)
+sns.barplot(x=imp.values, y=imp.index, palette="Blues_d", ax=axes[0])
+axes[0].set_title("Feature Importance — Order Value")
+axes[0].set_xlabel("Importance")
+
+axes[1].scatter(y_test.values[:200], y_pred[:200], alpha=0.4, color="steelblue")
+lims = [min(y_test.min(), y_pred.min()), max(y_test.max(), y_pred.max())]
+axes[1].plot(lims, lims, 'r--')
+axes[1].set_title("Actual vs Predicted — Order Value")
+axes[1].set_xlabel("Actual")
+axes[1].set_ylabel("Predicted")
+
+fig.suptitle("Predictive: Order Value Regression", fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# ── 2. Predict Repeat Order ───────────────────────────────────────────────────
+X2 = df_enc[FEATURES + ["rating_given", "order_value", "delivery_fee"]]
+y2 = df_enc["is_repeat_order"]
+X_train2, X_test2, y_train2, y_test2 = train_test_split(X2, y2, test_size=0.2, random_state=42)
+
+clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+clf.fit(X_train2, y_train2)
+y_pred2 = clf.predict(X_test2)
+
+print("\nRepeat Order Classification:")
+print(classification_report(y_test2, y_pred2, target_names=["Not Repeat", "Repeat"]))
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+ConfusionMatrixDisplay.from_predictions(y_test2, y_pred2,
+    display_labels=["Not Repeat", "Repeat"], cmap="Blues", ax=axes[0])
+axes[0].set_title("Confusion Matrix — Repeat Order")
+
+imp2 = pd.Series(clf.feature_importances_,
+                 index=FEATURES + ["rating_given", "order_value", "delivery_fee"]
+                 ).sort_values(ascending=False).head(10)
+sns.barplot(x=imp2.values, y=imp2.index, palette="Greens_d", ax=axes[1])
+axes[1].set_title("Top 10 Features — Repeat Order")
+axes[1].set_xlabel("Importance")
+
+fig.suptitle("Predictive: Repeat Order Classification", fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+
+# ============================================================
+# PRESCRIPTIVE ANALYSIS — Run each cell separately in Google Colab
+# ============================================================
+
+# ── SETUP (Run this first) ───────────────────────────────────
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings("ignore")
+
+df = pd.read_csv("food_ordering_behavior_cleaned.csv")
+sns.set_theme(style="whitegrid")
+
+# ============================================================
+# CELL 5 — Optimize Discount Targeting
+# ============================================================
+disc_yes = df[df["discount_applied"] == 1]
+disc_no  = df[df["discount_applied"] == 0]
+
+segments = ["city", "hunger_level", "mood", "restaurant_type"]
+fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+
+for col, ax in zip(segments, axes.flat):
+    avg_with    = disc_yes.groupby(col)["order_value"].mean().rename("With Discount")
+    avg_without = disc_no.groupby(col)["order_value"].mean().rename("Without Discount")
+    melted = pd.concat([avg_with, avg_without], axis=1).reset_index().melt(
+        id_vars=col, var_name="Discount", value_name="Avg Order Value")
+    sns.barplot(data=melted, x=col, y="Avg Order Value",
+                hue="Discount", palette=["#2ecc71", "#e74c3c"], ax=ax)
+    ax.set_title(f"Discount Impact by {col.replace('_', ' ').title()}")
+    ax.tick_params(axis="x", rotation=15)
+    ax.legend(title="")
+
+fig.suptitle("Prescriptive: Where Do Discounts Drive Most Value?", fontsize=14, fontweight="bold")
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# CELL 6 — Flag High-Risk Orders
+# ============================================================
+df["risk_score"] = 0
+df.loc[df["time_taken_to_order"] > df["time_taken_to_order"].quantile(0.75), "risk_score"] += 1
+df.loc[df["rainy_weather"] == 1,  "risk_score"] += 1
+df.loc[df["mood"] == "Stressed",  "risk_score"] += 1
+df.loc[df["delivery_fee"] > df["delivery_fee"].quantile(0.75), "risk_score"] += 1
+df["high_risk"] = df["risk_score"] >= 3
+
+print(f"High-risk orders : {df['high_risk'].sum():,} ({df['high_risk'].mean()*100:.1f}%)")
+print(f"Avg rating high-risk : {df[df['high_risk']]['rating_given'].mean():.2f}")
+print(f"Avg rating normal    : {df[~df['high_risk']]['rating_given'].mean():.2f}")
+
+fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+sns.kdeplot(data=df[df["high_risk"]],  x="rating_given", label="High Risk",
+            fill=True, ax=axes[0], color="red",  alpha=0.4)
+sns.kdeplot(data=df[~df["high_risk"]], x="rating_given", label="Normal",
+            fill=True, ax=axes[0], color="blue", alpha=0.4)
+axes[0].set_title("Rating: High-Risk vs Normal")
+axes[0].legend()
+
+sns.countplot(data=df, x="risk_score", palette="Reds", ax=axes[1])
+axes[1].set_title("Risk Score Distribution")
+
+risk_city = df.groupby("city")["high_risk"].mean().sort_values(ascending=False).reset_index()
+sns.barplot(data=risk_city, x="city", y="high_risk", palette="OrRd", ax=axes[2])
+axes[2].set_title("High-Risk Rate by City")
+axes[2].set_ylabel("Rate")
+axes[2].tick_params(axis="x", rotation=15)
+
+fig.suptitle("Prescriptive: Flag & Manage High-Risk Orders", fontsize=14, fontweight="bold")
+plt.tight_layout()
+plt.show()
